@@ -150,7 +150,42 @@ class FabricDocumentationFacts(AvdFacts):
                     routed,  # boolean to tell if the interface is routed or switched
                 )
                 topology.add_edge(hostname, peer, data, peer_data)
+            # Add port-channel interfaces to the topology
+            for port_channel_interface in get(structured_config, "port_channel_interfaces", default=[]):
+                if (peer_type := get(port_channel_interface, "peer_type")) not in self._node_types and peer_type != "mlag_peer":
+                    continue
 
+                peer = get(port_channel_interface, "peer", required=True)
+                if peer_type == "mlag_peer":
+                    peer_type = self.avd_facts[peer].type
+                    mlag_peer = True
+                else:
+                    mlag_peer = False
+                if peer_interface := get(port_channel_interface, "peer_interface"):
+                    peer_port_channel_interface = get_item(
+                        get(self.structured_configs, f"{peer}..port_channel_interfaces", separator="..", default=[]), "name", peer_interface, default={}
+                    )
+                    peer_ip_address = get(peer_port_channel_interface, "ip_address")
+                else:
+                    peer_ip_address = None
+
+                routed = get(port_channel_interface, "switchport.enabled") is False
+
+                data = (
+                    self.avd_facts[hostname].type,  # type
+                    get(port_channel_interface, "name"),  # interface
+                    get(port_channel_interface, "ip_address"),  # ip_address
+                    mlag_peer,  # is_mlag_peer
+                    routed,  # boolean to tell if the interface is routed or switched
+                )
+                peer_data = (
+                    peer_type,  # type
+                    peer_interface,  # interface
+                    peer_ip_address,  # ip_address
+                    mlag_peer,  # is_mlag_peer
+                    routed,  # boolean to tell if the interface is routed or switched
+                )
+                topology.add_edge(hostname, peer, data, peer_data)
         return topology
 
     @cached_property
